@@ -1,0 +1,65 @@
+"""
+Question 1. Give an implementation of the Full Reversal algorithm with the heights αu in
+DistAlgo that may produce executions that are not zero-delayed.
+"""
+
+class Agent(process):
+    def setup(neighbours, height, isDest):
+        self.msg_count = 0
+        self.ack_count = 0
+        self.neighbours_height = []
+
+    def receive(msg=("HEIGHT", height), from_=sender):
+        self.msg_count += 1
+        output(f"Received 'reversed' message from {sender}")
+        self.neighbours_height.append(height)
+    
+    def receive(msg="ACK", from_=sender):
+        assert(sender in self.neighbours)
+        self.ack_count += 1
+
+    def run():
+        while(True):
+
+            # Phase 1: u sends a message to all its neighbors
+            for v in self.neighbours:
+                send(("HEIGHT", self.height), to=v)
+            
+            # Phase 2: u receives the message sent by v in this round
+            await(self.msg_count == len(self.neighbours))
+            self.msg_count = 0  # reset
+
+            # Phase 3: internal phase where u updates its local state
+            if (not self.isDest and (self.height < min(self.neighbours_height or 
+                                    (self.height <= min(self.neighbours_height and True))))):
+                self.height = 1 + max(self.neighbours_height)
+
+            self.neighbours_height = []  # reset
+
+            for v in self.neighbours:
+                send("ACK", to=v)
+            await(self.ack_count == len(self.neighbours))
+            self.ack_count = 0  # reset
+
+
+def main():
+    
+    # We use the same graph as in the article for testing purpose
+    graph = [  
+        [0, 0, 0, 0, 0, 1, 0],  
+        [1, 0, 0, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0, 0, 0],
+        [0, 0, 1, 0, 1, 0, 0],
+        [0, 1, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 1, 0],
+    ]
+    N = len(graph[0])
+
+    agents = list(new(Agent, num=N))
+
+    for k in range(N):
+        neighbors_in = [agents[i] for i in range(N) if graph[k][i] == 1]
+        neighbors_out = [agents[i] for i in range(N) if graph[i][k] == 1]
+        setup(agents[k], (neighbors_out, neighbors_in, k == 6))
+    start(agents)

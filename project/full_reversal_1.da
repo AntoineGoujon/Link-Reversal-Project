@@ -1,0 +1,64 @@
+config(channel = 'reliable')
+
+class Agent(process):
+
+    def setup(neighbors, height, isDestination):
+        self.msg_counter = 0
+        self.ack_counter = 0
+        self.nNeighbors = len(neighbors)
+        self.neighborsHeights = []
+
+    def receive(msg=("HEIGHT", height), from_=u):
+        self.neighborsHeights.append(height)
+        self.msg_counter +=1
+        send("ACK", to=u)
+
+    def receive(msg="ACK", from_=u):
+        self.ack_counter += 1
+
+    def run():
+        while(True):
+            # Phase 1: send message to all neighbors
+            for v in self.neighbors:
+                send(("HEIGHT", self.height), to=v)
+
+            # Phase 2: receives all messages
+            await(self.ack_counter == self.nNeighbors)
+            await(self.msg_counter == self.nNeighbors)
+
+            output(f"{neighborsHeights}")
+            # Internal phase
+            self.msg_counter = 0
+            self.ack_counter = 0
+            may_reverse = (not self.isDestination) and (self.height < min(self.neighborsHeights))
+            if may_reverse:
+                new_height = max(self.neighborsHeights) + 1
+                output(f"new_height = {new_height} prev = {self.height} for {self}")
+                self.height = new_height
+            self.neighborsHeights = []
+
+
+def main():
+
+    # We use for tests the same graph as in the paper
+    graph = [  
+        [0, 0, 0, 0, 0, 1, 0],  
+        [1, 0, 0, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0, 0, 0],
+        [0, 0, 1, 0, 1, 0, 0],
+        [0, 1, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 1, 0],
+    ]
+
+    # The list of heights corresponding to each node
+    # is choosen to fit
+    heights = [5, 4, 2, 0, 3, 6, 1]
+    N = len(graph[0])
+
+    agents = list(new(Agent, num=N))
+
+    for k in range(N):
+        neighbors = [agents[i] for i in range(N) if graph[k][i] == 1 or graph[i][k] == 1]
+        setup(agents[k], (neighbors, heights[k], k == 6))
+    start(agents)

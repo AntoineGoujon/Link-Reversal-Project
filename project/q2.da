@@ -1,0 +1,82 @@
+"""
+Question 2. Give a second implementation of Full Reversal in DistAlgo in which each agent u
+maintains a list Inu of its incoming neighbors instead of the height αu.
+"""
+
+class Agent(process):
+    def setup(in_neighbours, out_neighbours, isDest):
+        self.msg_count = 0
+        self.ack_count = 0
+        self.neighbours = in_neighbours + out_neighbours
+        self.links_to_reverse = []
+
+    def receive(msg="REV", from_=sender):
+        assert(sender in self.out_neighbours)
+        self.msg_count += 1
+        output(f"Received 'reversed' message from {sender}")
+        self.links_to_reverse.append(sender)
+    
+    def receive(msg="NOP", from_=sender):
+        assert(sender in self.neighbours)
+        self.msg_count += 1
+    
+    def receive(msg="ACK", from_=sender):
+        assert(sender in self.neighbours)
+        self.ack_count += 1
+
+    def run():
+        while(True):
+
+            # Phase 1: u sends a message to all its neighbors
+            if len(self.out_neighbours) == 0 and not self.isDest:
+                for v in self.neighbours:
+                    send("REV", to=v)
+                self.links_to_reverse = self.neighbours
+            else:
+                for v in self.neighbours:
+                    send("NOP", to=v)
+            
+            # Phase 2: u receives the message sent by v in this round
+            await(self.msg_count == len(self.neighbours))
+            self.msg_count = 0  # reset
+
+            # Phase 3: internal phase where u updates its local state
+            if len(self.links_to_reverse) != 0:
+                output(f"Reversing {len(self.links_to_reverse)}/{len(self.neighbours)} links")
+            for v in self.links_to_reverse:
+                if v in self.in_neighbours:
+                    self.in_neighbours.remove(v)
+                    self.out_neighbours.append(v)
+                else:
+                    self.out_neighbours.remove(v)
+                    self.in_neighbours.append(v)
+            self.links_to_reverse = []  # reset
+
+
+            for v in self.neighbours:
+                send("ACK", to=v)
+            await(self.ack_count == len(self.neighbours))
+            self.ack_count = 0  # reset
+
+
+def main():
+    
+    # We use the same graph as in the article for testing purpose
+    graph = [  
+        [0, 0, 0, 0, 0, 1, 0],  
+        [1, 0, 0, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0, 0, 0],
+        [0, 0, 1, 0, 1, 0, 0],
+        [0, 1, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 1, 0],
+    ]
+    N = len(graph[0])
+
+    agents = list(new(Agent, num=N))
+
+    for k in range(N):
+        neighbors_in = [agents[i] for i in range(N) if graph[k][i] == 1]
+        neighbors_out = [agents[i] for i in range(N) if graph[i][k] == 1]
+        setup(agents[k], (neighbors_out, neighbors_in, k == 6))
+    start(agents)

@@ -1,0 +1,83 @@
+config(channel = 'reliable')
+
+class Agent(process):
+
+    def setup(neighbors_out, neighbors_in, isDestination):
+        self.msg_counter = 0
+        self.ack_counter = 0
+        self.neighbors = neighbors_in + neighbors_out
+        self.nNeighbors = len(self.neighbors)
+        self.l = []
+
+    def receive(msg="REVERSE", from_=u):
+        assert (u in neighbors_out)
+        assert (u not in neighbors_in)
+
+        self.l.append(u)
+
+        self.msg_counter += 1
+
+    def receive(msg="NOP", from_=u):
+        self.msg_counter += 1
+
+    def receive(msg="ACK", from_=u):
+        self.ack_counter += 1
+
+    def run():
+        while(True):
+
+            if (self.nNeighbors!=len(self.neighbors)):
+                output(f"n: {self.nNeighbors}=={len(self.neighbors)}")
+            may_reverse = (not self.isDestination) and (len(self.neighbors_out) == 0)
+            # Phase 1: send message to all neighbors
+            if may_reverse:
+                for v in self.neighbors:
+                    send("REVERSE", to=v)
+                    self.l.append(v)
+            else:
+                for v in self.neighbors:
+                    send("NOP", to=v)
+
+            # Phase 2: receives all messages
+            await(self.msg_counter == self.nNeighbors)
+            self.msg_counter = 0
+            # Internal phase
+            if may_reverse:
+                self.neighbors_in = []
+                self.neighbors_out = self.neighbors
+
+                for v in self.l:
+                    self.neighbors_in.remove(v)
+                    self.neighbors_out.append(v)
+            else:
+                for v in self.l:
+                    self.neighbors_out.remove(v)
+                    self.neighbors_in.append(v)
+            self.l = []
+            for v in self.neighbors:
+                    send("ACK", to=v)
+            await(self.ack_counter == self.nNeighbors)
+            self.ack_counter = 0
+
+
+
+def main():
+
+    graph = [  
+        [0, 0, 0, 0, 0, 1, 0],  
+        [1, 0, 0, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0, 0, 0],
+        [0, 0, 1, 0, 1, 0, 0],
+        [0, 1, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 1, 0],
+    ]
+    N = len(graph[0])
+
+    agents = list(new(Agent, num=N))
+
+    for k in range(N):
+        neighbors_in = [agents[i] for i in range(N) if graph[k][i] == 1]
+        neighbors_out = [agents[i] for i in range(N) if graph[i][k] == 1]
+        setup(agents[k], (neighbors_out, neighbors_in, k == 6))
+    start(agents)
